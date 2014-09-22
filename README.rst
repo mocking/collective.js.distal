@@ -1,15 +1,13 @@
-************
-template-tal
-************
+********************
+collective.js.distal
+********************
 
 .. contents:: Table of Contents
 
 Life, the Universe, and Everything
 ==================================
 
-`Distal`_      
-
-Distal is a Javascript tool that automatically fills your webpage with data from a JSON source.
+`Distal`_ is a Javascript tool that automatically fills your webpage with data from a JSON source.
 Freeing you from needing to traverse nodes or create DOM trees just to add dynamic data.
 Allowing you to focus on the important things such as data logic and webpage design. 
 
@@ -63,11 +61,9 @@ Not entirely unlike
 ===================
 
 `jstal`_
-
     TAL implementation in JavaScript using E4X.
 
 `template-tal`_
-
     XML Lightweight Template Attribute Language implementation for Javascript.
 
 .. _`jstal`: https://code.google.com/p/jstal/
