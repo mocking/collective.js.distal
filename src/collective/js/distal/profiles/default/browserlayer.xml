@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<layers>
+  <layer
+      name="collective.js.distal"
+      interface="collective.js.distal.interfaces.IAddOnInstalled"
+      />
+</layers>
