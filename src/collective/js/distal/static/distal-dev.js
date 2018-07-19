@@ -36,14 +36,14 @@ function distal(root, obj) {
     altAttr = {
       className:1, "class":1, /*innerHTML:1,*/ innerText:1, style:1, src:1, href:1, id:1, 
       value:1, checked:1, selected:1, label:1, htmlFor:1, text:1, title:1, disabled:1
-    }
-    ,formInputHasBody = {BUTTON:1, LABEL:1, LEGEND:1, FIELDSET:1, OPTION:1};
+    },
+    formInputHasBody = {BUTTON:1, LABEL:1, LEGEND:1, FIELDSET:1, OPTION:1};
 
 
   //output formatter
   let format = distal.format;
 
-  let TAL = "*[" + [qdef, qif, qrepeat, qattr/*, qtext*/].join("],*[") + "]";
+  let TAL = "*[" + [qdef, qif, qrepeat, qattr, qtext].join("],*[") + "]";
 
   let getProp = function(s) {return this[s]};
 
