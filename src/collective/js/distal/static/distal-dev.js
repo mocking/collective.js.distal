@@ -15,69 +15,62 @@ limitations under the License. */
 function distal(root, obj) {
   "use strict";
   //create a duplicate object which we can add properties to without affecting the original
-  var wrapper = function() {};
+  let wrapper = function() {};
   wrapper.prototype = obj;
   obj = new wrapper();
 
-  var resolve = distal.resolve;
-  var node = root;
-  var doc = root.ownerDocument;
-  var querySelectorAll = !!root.querySelectorAll;
-  //optimize comparison check
-  var innerText = "innerText" in root ? "innerText" : "textContent";
-  //attributes which don't support setAttribute()
-  var altAttr = {className:1, "class":1, innerHTML:1, style:1, src:1, href:1, id:1, value:1, checked:1, selected:1, label:1, htmlFor:1, text:1, title:1, disabled:1};
-  var formInputHasBody = {BUTTON:1, LABEL:1, LEGEND:1, FIELDSET:1, OPTION:1};
+  let resolve = distal.resolve,
+    node = root,
+    doc = root.ownerDocument,
+    undefined = {}.undefined,
 
-  //TAL attributes for querySelectorAll call
-  var qdef = distal;
-  var beforeAttr = qdef.beforeAttr;
-  var beforeText = qdef.beforeText;
-  var qif = qdef.qif || "data-qif";
-  var qrepeat = qdef.qrepeat || "data-qrepeat";
-  var qattr = qdef.qattr || "data-qattr";
-  var qtext = qdef.qtext || "data-qtext";
-  var qdup = qdef.qdup || "data-qdup";
+    //TAL attributes for querySelectorAll call
+    qdef = "data-qdef",
+    qif = "data-qif",
+    qrepeat = "data-qrepeat",
+    qattr = "data-qattr",
+    qtext = "data-qtext",
+    qdup = "data-qdup",
+
+    //attributes which don't support setAttribute()
+    altAttr = {
+      className:1, "class":1, /*innerHTML:1,*/ innerText:1, style:1, src:1, href:1, id:1, 
+      value:1, checked:1, selected:1, label:1, htmlFor:1, text:1, title:1, disabled:1
+    }
+    ,formInputHasBody = {BUTTON:1, LABEL:1, LEGEND:1, FIELDSET:1, OPTION:1};
+
 
   //output formatter
-  var format = qdef.format;
+  let format = distal.format;
 
-  qdef = qdef.qdef || "data-qdef";
-  var TAL = "*[" + [qdef, qif, qrepeat, qattr, qtext].join("],*[") + "]";
-  var html;
+  let TAL = "*[" + [qdef, qif, qrepeat, qattr/*, qtext*/].join("],*[") + "]";
 
-  var getProp = function(s) {return this[s];};
+  let getProp = function(s) {return this[s]};
 
   //there may be generated node that are siblings to the root node if the root node 
   //itself was a repeater. Remove them so we don't have to deal with them later
-  var tmpNode = root.parentNode;
-  while((node = root.nextSibling) && (node.qdup || (node.nodeType == 1 && node.getAttribute(qdup)))) {
+  let tmpNode = root.parentNode;
+  while((node = root.nextSibling) && (node.qdup || (node.nodeType === 1 && node.hasAttribute(qdup)))) {
     tmpNode.removeChild(node);
   }
 
   //if we generate repeat nodes and are dealing with non-live NodeLists, then
   //we add them to the listStack[] and process them first as they won't appear inline
   //due to non-live NodeLists when we traverse our tree
-  var listStack;
-  var posStack = [0];
-  var list;
-  var pos = 0;
-  var attr;
-  var attr2;
-  var undefined = {}._;
 
-  //get a list of concerned nodes within this root node. If querySelectorAll is
-  //supported we use that but it is treated differently because it is a non-live NodeList.
-  if(querySelectorAll) {
-    //remove all generated nodes (repeats), so we don't have to deal with them later.
-    //Only need to do this for non-live NodeLists.
-    list = root.querySelectorAll("*[" + qdup + "]");
-    while((node = list[pos++])) node.parentNode.removeChild(node);
-    pos = 0;
+  //get a list of concerned nodes within this root node.
+  
+  //remove all generated nodes (repeats), so we don't have to deal with them later.
+  //Only need to do this for non-live NodeLists.
+  {
+    let nodes = root.querySelectorAll("*[" + qdup + "]");
+    for(let n of nodes) n.parentNode.removeChild(n);
   }
 
-  listStack = [querySelectorAll ? root.querySelectorAll(TAL) : root.getElementsByTagName("*")];
-  list = [root];
+  let listStack = [root.querySelectorAll(TAL)];
+  let posStack = [0];
+  let list = [root];
+  let pos = 0;
 
   while(true) {
     node = list[pos++];
@@ -90,66 +83,78 @@ function distal(root, obj) {
     }
 
     if(!node) break;
+    let attr;
 
     //creates a shortcut to an object
-    //e.g., <section qdef="feeds main.sidebar.feeds">
-
+    //e.g., <section qdef="feeds main.sidebar.feeds; user main.accounts.user">
     attr = node.getAttribute(qdef);
     if(attr) {
-      attr = attr.split(" ");
-      //add it to the object as a property
-      html = resolve(obj, attr[1]);
+      let multi = attr.split(/;\s*/);
+      for(let each of multi) {
+        let [name, value, index] = each.split(" ");
+        //add it to the object as a property
+        value = resolve(obj, value);
 
-      //the 3rd parameter if exists is a numerical index into the array
-      if((attr2 = attr[2])) {
-        obj["#"] = parseInt(attr2) + 1;
-        html = html[attr2];
+        //the 3rd parameter if exists is a numerical index into the array
+        if(index) {
+          obj["#"] = parseInt(index) + 1;
+          value = value[index];
+        }
+
+        obj[name] = value;
       }
-
-      obj[attr[0]] = html;
     }
 
     //shown if object is truthy
-    //e.g., <img qif="item.unread"> <img qif="item.count gt 1">
+    //e.g., <img qif="item.unread or item.header"> <img qif="item.count gt 1">
 
     attr = node.getAttribute(qif);
     if(attr) {
-      attr = attr.split(" ");
-      if(attr[0].indexOf("not:") == 0) {
-        attr = [attr[0].substr(4), "not", 0];
+      let value;
+      let list = attr.split(" or ");
+
+      for(let each of list) {
+        let list = each.split(" and ");
+
+        for(let each of list) {
+          let [name, op, compare] = each.split(" ", 3);
+          if(name.indexOf("not:") === 0) {
+            name = name.substr(4);
+            op = "not";
+            compare = 0;
+          }
+
+          value = resolve(obj, name);
+
+          //if obj is empty array it is still truthy, so make it the array length
+          if(value && value.join && value.length > -1) value = value.length;
+
+          if(op) {
+            if(typeof value === "number") compare *= 1;
+
+            switch(op) {
+              case "not": value = !value; break;
+              case "eq": value = (value == compare); break;
+              case "ne": value = (value != compare); break;
+              case "gt": value = (value > compare); break;
+              case "lt": value = (value < compare); break;
+              case "cn": value = (value && value.indexOf(compare) >= 0); break;
+              case "nc": value = (value && value.indexOf(compare) < 0); break;
+              default: throw node;
+            }
+          }
+          if(!value) break;
+        }
+        if(value) break;
       }
 
-      var obj2 = resolve(obj, attr[0]);
-      //if obj is empty array it is still truthy, so make it the array length
-      if(obj2 && obj2.join && obj2.length > -1) obj2 = obj2.length;
-
-      if(attr.length > 2) {
-        if(attr[3]) attr[2] = attr.slice(2).join(" ");
-        if(typeof obj2 == "number") attr[2] *= 1;
-
-        switch(attr[1]) {
-          case "not": attr = !obj2; break;
-          case "eq": attr = (obj2 == attr[2]); break;
-          case "ne": attr = (obj2 != attr[2]); break;
-          case "gt": attr = (obj2 > attr[2]); break;
-          case "lt": attr = (obj2 < attr[2]); break;
-          case "cn": attr = (obj2 && obj2.indexOf(attr[2]) >= 0); break;
-          case "nc": attr = (obj2 && obj2.indexOf(attr[2]) < 0); break;
-          default: throw node;
-        }
-      } else attr = obj2;
-
-      if(attr) {
+      if(value) {
         node.style.display = "";
       } else {
         node.style.display = "none";
 
         //skip over all nodes that are children of this node
-        if(querySelectorAll) {
-          pos += node.querySelectorAll(TAL).length;
-        } else {
-          pos += node.getElementsByTagName("*").length;
-        }
+        pos += node.querySelectorAll(TAL).length;
 
         //stop processing the rest of this node as it is invisible
         continue;
@@ -163,129 +168,83 @@ function distal(root, obj) {
 
     attr = node.getAttribute(qrepeat);
     if(attr) {
-      attr2 = attr.split(" ");
+      let [name, value] = attr.split(" ");
 
-      //if live NodeList, remove adjacent repeated nodes
-      if(!querySelectorAll) {
-        html = node.parentNode;
-        while((tmpNode = node.nextSibling) && (tmpNode.qdup || (tmpNode.nodeType == 1 && tmpNode.getAttribute(qdup)))) {
-          html.removeChild(tmpNode);
-        }
-      }
-
-      if(!attr2[1]) throw attr2;
-      var objList = resolve(obj, attr2[1]);
+      if(!value) throw node;
+      let objList = resolve(obj, value);
 
       if(objList && objList.length) {
         node.style.display = "";
         //allow this node to be treated as index zero in the repeat list
         //we do this by setting the shortcut variable to array[0]
-        obj[attr2[0]] = objList[0];
+        obj[name] = objList[0];
         obj["#"] = 1;
 
       } else {
         //we need to hide the repeat node if the object doesn't resolve
         node.style.display = "none";
         //skip over all nodes that are children of this node
-        if(querySelectorAll) {
-          pos += node.querySelectorAll(TAL).length;
-        } else {
-          pos += node.getElementsByTagName("*").length;
-        }
+        pos += node.querySelectorAll(TAL).length;
 
         //stop processing the rest of this node as it is invisible
         continue;
       }
 
-      if(objList.length > 1) {
-        //we need to duplicate this node x number of times. But instead
-        //of calling cloneNode x times, we get the outerHTML and repeat
-        //that x times, then innerHTML it which is faster
-        html = new Array(objList.length - 1);
-        for(var len = html.length, i = len; i > 0; i--) html[len - i] = i;
+      if(objList.length > 1) {  //we need to duplicate this node x number of times
 
-        tmpNode = node.cloneNode(true);
-        if("form" in tmpNode) tmpNode.checked = false;
-        tmpNode.setAttribute(qdef, attr);
-        tmpNode.removeAttribute(qrepeat);
-        tmpNode.setAttribute(qdup, "1");
-        tmpNode = tmpNode.outerHTML || 
-          doc.createElement("div").appendChild(tmpNode).parentNode.innerHTML;
+        //push the current list and index to the stack and process the repeated
+        //nodes first. We need to do this inline because some variable may change 
+        //value later, if they become redefined.
+        listStack.push(list);
+        posStack.push(pos);
+        //clear the current list so that in the next round we grab another list
+        //off the stack
+        list = [];
 
-        //we're doing something like this:
-        //html = "<div qdef=" + [1,2,3].join("><div qdef=") + ">"
-        var prefix = tmpNode.indexOf(' '+qdef+'="' + attr + '"');
-        if(prefix == -1) prefix = tmpNode.indexOf(" "+qdef+"='" + attr + "'");
-        prefix = prefix + qdef.length + 3 + attr.length;
+        //add this node to the stack so that it is processed right before we pop the
+        //main list off the stack. This will be the last node to be processed and we 
+        //use it to assign our repeat variable to array index 0 so that the node's
+        //children, which are also at array index 0, will be processed correctly
+        let fakeNode = {getAttribute: getProp};
+        fakeNode[qdef] = attr + " 0";
+        listStack.push([fakeNode]);
+        posStack.push(0);
+      
+        let clone = node.cloneNode(true);
+        if("form" in clone) clone.checked = false;
+        clone.setAttribute(qdup, "1");
 
-        html = tmpNode.substr(0, prefix) + " " + 
-          html.join(tmpNode.substr(prefix) + tmpNode.substr(0, prefix) + " ") + 
-          tmpNode.substr(prefix);
+        let newAttr = node.getAttribute(qdef) || "";
+        if(newAttr) newAttr += "; ";
+        newAttr += node.getAttribute(qrepeat) + " ";
 
-        tmpNode = doc.createElement("div");
+        clone.removeAttribute(qrepeat);
 
-        //workaround for IE which can't innerHTML tables and selects
-        if("cells" in node && !("tBodies" in node)) {  //TR
-          tmpNode.innerHTML = "<table>" + html + "<\/table>";
-          tmpNode = tmpNode.firstChild.tBodies[0].childNodes;
-        } else if("cellIndex" in node) {  //TD
-          tmpNode.innerHTML = "<table><tr>" + html + "<\/tr><\/table>";
-          tmpNode = tmpNode.firstChild.tBodies[0].firstChild.childNodes;
-        } else if("selected" in node && "text" in node) {  //OPTION, OPTGROUP
-          tmpNode.innerHTML = "<select>" + html + "<\/select>";
-          tmpNode = tmpNode.firstChild.childNodes;
-        } else {
-          tmpNode.innerHTML = html;
-          tmpNode = tmpNode.childNodes;
-        }
+        let parent = node.parentNode;
+        let sibling = node.nextSibling;
+        let frag = doc.createDocumentFragment();
 
-        prefix = node.parentNode;
-        attr2 = node.nextSibling;
-
-        if(querySelectorAll || node == root) {
-          //push the current list and index to the stack and process the repeated
-          //nodes first. We need to do this inline because some variable may change 
-          //value later, if the become redefined.
-          listStack.push(list);
-          posStack.push(pos);
-
-          //add this node to the stack so that it is processed right before we pop the
-          //main list off the stack. This will be the last node to be processed and we 
-          //use it to assign our repeat variable to array index 0 so that the node's
-          //children, which are also at array index 0, will be processed correctly
-          list = {getAttribute:getProp};
-          list[qdef] = attr + " 0";
-          listStack.push([list]);
+        for(let i = 1; i < objList.length; i++) {
+          let node = frag.appendChild(clone.cloneNode(true));
+          node.setAttribute(qdef, newAttr + i);
+          
+          //we need to add the repeated nodes to the listStack because 
+          //we are either (1) dealing with a live NodeList and we are still at
+          //the root node so the newly created nodes are adjacent to the root
+          //and so won't appear in the NodeList, or (2) we are dealing with a
+          //non-live NodeList, so we need to add them to the listStack
+          listStack.push(node.querySelectorAll(TAL));
           posStack.push(0);
 
-          //clear the current list so that in the next round we grab another list
-          //off the stack
-          list = [];
+          listStack.push([node]);
+          posStack.push(0);
 
-          for(var i = tmpNode.length - 1; i >= 0; i--) {
-            html = tmpNode[i];
-            //we need to add the repeated nodes to the listStack because 
-            //we are either (1) dealing with a live NodeList and we are still at
-            //the root node so the newly created nodes are adjacent to the root
-            //and so won't appear in the NodeList, or (2) we are dealing with a
-            //non-live NodeList, so we need to add them to the listStack
-            listStack.push(querySelectorAll ? html.querySelectorAll(TAL) : html.getElementsByTagName("*"));
-            posStack.push(0);
-
-            listStack.push([html]);
-            posStack.push(0);
-
-            html.qdup = 1;
-            prefix.insertBefore(html, attr2);
-          }
-        } else {
-          for(var i = tmpNode.length - 1; i >= 0; i--) {
-            html = tmpNode[i];
-            html.qdup = 1;
-            prefix.insertBefore(html, attr2);
-          }
+          node.qdup = 1;
         }
-        prefix.selectedIndex = -1;
+        parent.insertBefore(frag, sibling);
+
+        //in case it is a select element
+        parent.selectedIndex = -1;
       }
     }
 
@@ -294,26 +253,36 @@ function distal(root, obj) {
 
     attr = node.getAttribute(qattr);
     if(attr) {
-      var name;
-      var value;
-      html = attr.split("; ");
-      for(var i = html.length - 1; i >= 0; i--) {
-        attr = html[i].split(" ");
-        name = attr[0];
-        if(!attr[1]) throw attr;
-        value = resolve(obj, attr[1]);
-        if(value == undefined) value = "";
-        if(beforeAttr) beforeAttr(node, name, value);
-        if((attr = attr[2] && format[attr[2]])) value = attr(value);
+      let name;
+      let value;
+      let list = attr.split(/;\s*/);
+      for(let each of list) {
+        let [name, value, fmt] = each.split(" ", 3);
+        if(!value) throw node;
+        
+        value = resolve(obj, value);
+        if(value === undefined) value = "";
+
+        if(fmt) fmt = format[fmt];
+        if(fmt) value = fmt(value);
+
         if(altAttr[name]) {
           switch(name) {
-            case "innerHTML": throw node;  //should use "qtext"
             case "disabled":
             case "checked":
             case "selected": node[name] = !!value; break;
             case "style": node.style.cssText = value; break;
-            case "text": node[querySelectorAll ? name : innerText] = value; break;  //option.text unstable in IE
-            case "class": name = "className";
+            case "innerText":
+            case "text": node.textContent = value; break;  //e.g. <option value=value>text</option>
+            case "class": 
+            case "className":
+              if(!node.hasAttribute("data-qclass0")) {
+                node.setAttribute("data-qclass0", node.className);
+              } else {
+                node.className = node.getAttribute("data-qclass0");
+              }
+              if(value) node.classList.add(value);
+              break;
             default: node[name] = value;
           }
         } else {
@@ -322,47 +291,48 @@ function distal(root, obj) {
       }
     }
 
-    //sets the innerHTML on the node
-    //e.g., <div qtext="html item.description">
+    //sets the innerText on the node
+    //e.g., <div qtext="item.description">
 
     attr = node.getAttribute(qtext);
     if(attr) {
-      attr = attr.split(" ");
+      let [value, fmt] = attr.split(" ");
 
-      html = (attr[0] == "html");
-      attr2 = resolve(obj, attr[html ? 1 : 0]);
-      if(attr2 == undefined) attr2 = "";
+      value = resolve(obj, value);
+      if(value === undefined) value = "";
 
-      if(beforeText) beforeText(node, attr2);
-      if((attr = attr[html ? 2 : 1]) && (attr = format[attr])) attr2 = attr(attr2);
+      if(fmt) fmt = format[fmt];
+      if(fmt) value = fmt(value);
 
-      if(html) {
-        node.innerHTML = attr2;
-      } else {
-        node["form" in node && !formInputHasBody[node.tagName] ? "value" : innerText] = attr2;
-      }
+      node["form" in node && !formInputHasBody[node.tagName] ? "value" : "textContent"] = value;
     }
   }  //end while
 }
 
 //follows the dot notation path to find an object within an object: obj["a"]["b"]["1"] = c;
-distal.resolve = function(obj, seq, x, lastObj) {
+distal.resolve = function(obj, seq) {
   //if fully qualified path is at top level: obj["a.b.d"] = c
-  if((x = obj[seq])) return (typeof x == "function") ? x.call(obj, seq) : x;
+  let lastObj, x = obj[seq];
+  if(x) return (typeof x === "function") ? x.call(obj, seq) : x;
 
   seq = seq.split(".");
   x = 0;
-  while(seq[x] && (lastObj = obj) && (obj = obj[seq[x++]]));
-  return (typeof obj == "function") ? obj.call(lastObj, seq.join(".")) : obj;
+  while(seq[x] && (lastObj = obj)) {
+    if(seq[x] === "@last" && obj instanceof Array) {
+      //we support a special property "array.@last" for accessing the last item in the array
+      obj = obj[obj.length - 1];
+      x++;
+    } else {
+      obj = obj[seq[x++]];
+    }
+  }
+  return (typeof obj === "function") ? obj.call(lastObj, seq.join(".")) : obj;
 };
 
 //number formatters
 distal.format = {
-  ",.": function(v, i) {
-    i = v*1;
-    return isNaN(i) ? v : (i % 1 ? i.toFixed(2) : parseInt(i, 10) + "").replace(/(^\d{1,3}|\d{3})(?=(?:\d{3})+(?:$|\.))/g, "$1,");
+  ",.": function(value) {
+    let i = value*1;
+    return isNaN(i) ? value : (i % 1 ? i.toFixed(2) : i + "").replace(/(^\d{1,3}|\d{3})(?=(?:\d{3})+(?:$|\.))/g, "$1,");
   }
 };
-
-//support RequireJS module pattern
-if(typeof define == "function" && define.amd) define("distal", function() {return distal;});
